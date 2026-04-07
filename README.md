@@ -4,9 +4,9 @@ A biomedical text embedding benchmark built as an [MTEB](https://github.com/embe
 
 ## Project Status
 
-This project is under active development as part of a Master's thesis at the University of Tuebingen.
+This project is under active development as part of my Master's thesis at the University of Tuebingen.
 
-**Current stage**: Preprocessing -- the PubMed XML-to-Parquet ETL pipeline and data filtering are complete. Benchmark task construction is next.
+**Current stage**: Preprocessing: the PubMed XML-to-Parquet ETL pipeline and data filtering are complete. Benchmark task construction is next.
 
 ## Repository Structure
 
@@ -16,7 +16,6 @@ PubMedTEB/
 ├── main.py            # Pipeline entry point
 ├── docs/              # Design documents and plans
 ├── mesh_explorer/     # MeSH hierarchy visualization
-├── archive/           # Old EDA notebook and outputs
 └── pyproject.toml     # Project config (uv)
 ```
 
@@ -32,4 +31,4 @@ uv sync
 
 ## Data
 
-The raw PubMed Baseline 2025 XML files and processed Parquet files live on the shared GPFS filesystem and are not included in this repository.
+The raw PubMed Baseline 2025 XML files and processed Parquet files.
