@@ -16,6 +16,7 @@ wheels/
 *.parquet
 *.xml
 archive/
+*/data/
 
 # MeSH artifacts
 mesh_explorer/mesh_tree.json
@@ -23,6 +24,10 @@ mesh_explorer/mesh_tree.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Docs
+docs/
+literature/
 
 # IDE
 .idea/
