@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MeSH 2025 Tree Explorer</title>
+<style>
+  :root {
+    --bg: #0d1117; --bg2: #161b22; --bg3: #21262d;
+    --fg: #e6edf3; --fg2: #8b949e; --accent: #58a6ff;
+    --border: #30363d; --radius: 8px;
+    --panel-width: 340px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+         background: var(--bg); color: var(--fg); overflow: hidden; height: 100vh; }
+
+  /* Header */
+  #header { display: flex; align-items: center; gap: 12px; padding: 10px 20px;
+            background: var(--bg2); border-bottom: 1px solid var(--border); z-index: 10;
+            flex-wrap: nowrap; }
+  #header h1 { font-size: 16px; font-weight: 600; white-space: nowrap; }
+  #search { flex: 0 0 260px; padding: 6px 12px; border-radius: var(--radius);
+            border: 1px solid var(--border); background: var(--bg3); color: var(--fg);
+            font-size: 13px; outline: none; }
+  #search:focus { border-color: var(--accent); }
+  #breadcrumb { flex: 1; font-size: 13px; color: var(--fg2); overflow: hidden;
+                text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  #breadcrumb span { cursor: pointer; }
+  #breadcrumb span:hover { color: var(--accent); }
+  #breadcrumb .bc-sep { color: var(--border); cursor: default; margin: 0 4px; }
+  #breadcrumb .bc-sep:hover { color: var(--border); }
+
+  .controls { display: flex; gap: 8px; flex-shrink: 0; align-items: center; }
+  .view-toggle, .size-toggle { display: flex; border: 1px solid var(--border); border-radius: var(--radius);
+                 overflow: hidden; flex-shrink: 0; }
+  .view-toggle button, .size-toggle button { padding: 5px 12px; background: var(--bg3); color: var(--fg2);
+                        border: none; cursor: pointer; font-size: 11px; font-weight: 500; }
+  .view-toggle button.active, .size-toggle button.active { background: var(--accent); color: #000; }
+  .view-toggle button:hover:not(.active), .size-toggle button:hover:not(.active) { background: var(--border); }
+
+  /* Stats bar */
+  #stats { display: flex; gap: 24px; padding: 6px 20px; background: var(--bg2);
+           border-bottom: 1px solid var(--border); font-size: 12px; color: var(--fg2); }
+  #stats .stat-val { color: var(--fg); font-weight: 600; }
+
+  /* Main area */
+  #main { position: relative; height: calc(100vh - 88px); display: flex; }
+  #sunburst-view, #graph-view { flex: 1; position: relative; min-width: 0; }
+  #graph-view { display: none; }
+
+  /* Tooltip */
+  #tooltip { position: fixed; pointer-events: none; background: var(--bg2);
+             border: 1px solid var(--border); border-radius: var(--radius);
+             padding: 10px 14px; font-size: 13px; z-index: 100; display: none;
+             max-width: 350px; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+  #tooltip .tt-name { font-weight: 600; margin-bottom: 4px; }
+  #tooltip .tt-row { color: var(--fg2); }
+  #tooltip .tt-row b { color: var(--fg); }
+
+  /* Legend */
+  #legend { position: absolute; bottom: 16px; left: 16px; background: var(--bg2);
+            border: 1px solid var(--border); border-radius: var(--radius);
+            padding: 12px; font-size: 11px; z-index: 10; max-height: 50vh;
+            overflow-y: auto; opacity: 0.9; }
+  #legend:hover { opacity: 1; }
+  #legend h3 { font-size: 12px; margin-bottom: 8px; color: var(--fg2); }
+  .legend-item { display: flex; align-items: center; gap: 6px; padding: 2px 0; cursor: pointer; }
+  .legend-item:hover { color: var(--accent); }
+  .legend-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+
+  /* Search results dropdown */
+  #search-results { position: absolute; top: 50px; left: 130px; width: 300px;
+                    background: var(--bg2); border: 1px solid var(--border);
+                    border-radius: var(--radius); max-height: 340px; overflow-y: auto;
+                    z-index: 20; display: none; }
+  .search-item { padding: 8px 12px; cursor: pointer; font-size: 13px;
+                 border-bottom: 1px solid var(--border); }
+  .search-item:last-child { border-bottom: none; }
+  .search-item:hover { background: var(--bg3); }
+  .search-item .si-code { color: var(--fg2); font-size: 11px; }
+  .search-item .si-count { color: var(--accent); font-size: 11px; float: right; }
+
+  /* Detail panel */
+  #detail-panel { width: 0; overflow: hidden; background: var(--bg2);
+                  border-left: 1px solid var(--border); transition: width 0.25s ease;
+                  flex-shrink: 0; position: relative; }
+  #detail-panel.open { width: var(--panel-width); }
+  #panel-toggle { position: absolute; left: -32px; top: 50%; transform: translateY(-50%);
+                  width: 28px; height: 56px; background: var(--bg2); border: 1px solid var(--border);
+                  border-right: none; border-radius: var(--radius) 0 0 var(--radius);
+                  color: var(--fg2); cursor: pointer; font-size: 14px; z-index: 5;
+                  display: flex; align-items: center; justify-content: center; }
+  #panel-toggle:hover { color: var(--accent); background: var(--bg3); }
+  .panel-content { width: var(--panel-width); padding: 16px; overflow-y: auto;
+                   height: 100%; font-size: 13px; }
+  .panel-content h2 { font-size: 16px; margin-bottom: 12px; line-height: 1.3;
+                       color: var(--fg); word-wrap: break-word; }
+  .detail-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px;
+                 margin-bottom: 16px; }
+  .detail-grid .label { color: var(--fg2); }
+  .detail-grid .value { color: var(--fg); font-weight: 500; }
+  .panel-section { margin-bottom: 16px; }
+  .panel-section h3 { font-size: 13px; color: var(--fg2); margin-bottom: 8px;
+                       border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+  .panel-section ul { list-style: none; max-height: 260px; overflow-y: auto; }
+  .panel-section li { padding: 4px 8px; cursor: pointer; border-radius: 4px;
+                       display: flex; justify-content: space-between; align-items: center; }
+  .panel-section li:hover { background: var(--bg3); color: var(--accent); }
+  .panel-section li .child-count { font-size: 11px; color: var(--fg2); }
+  .poly-tag { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 11px;
+              margin: 2px; cursor: pointer; }
+  .poly-tag:hover { opacity: 0.8; }
+
+  /* Pulse animation for search highlighting */
+  @keyframes segment-pulse {
+    0%, 100% { stroke: gold; stroke-width: 2; stroke-opacity: 0; }
+    25% { stroke: gold; stroke-width: 3; stroke-opacity: 1; }
+    50% { stroke: gold; stroke-width: 2; stroke-opacity: 0.5; }
+    75% { stroke: gold; stroke-width: 3; stroke-opacity: 1; }
+  }
+  .highlight-pulse { animation: segment-pulse 1.5s ease-in-out; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>MeSH 2025</h1>
+  <input id="search" type="text" placeholder="Search descriptors... (Ctrl+K)" autocomplete="off">
+  <div id="breadcrumb"><span>MeSH 2025</span></div>
+  <div class="controls">
+    <div class="size-toggle">
+      <button id="btn-equal" class="active" onclick="setSizeMode('equal')">Equal</button>
+      <button id="btn-count" onclick="setSizeMode('count')">By Count</button>
+    </div>
+    <div class="view-toggle">
+      <button id="btn-sunburst" class="active" onclick="switchView('sunburst')">Sunburst</button>
+      <button id="btn-graph" onclick="switchView('graph')">Force Graph</button>
+    </div>
+  </div>
+</div>
+<div id="stats">
+  <div>Descriptors: <span class="stat-val" id="stat-desc">-</span></div>
+  <div>Tree paths: <span class="stat-val" id="stat-paths">-</span></div>
+  <div>Current depth: <span class="stat-val" id="stat-depth">0</span></div>
+  <div>Unique articles: <span class="stat-val" id="stat-unique-articles">-</span></div>
+  <div>Descriptor tags: <span class="stat-val" id="stat-articles">-</span></div>
+</div>
+
+<div id="main">
+  <div id="sunburst-view"></div>
+  <div id="graph-view"></div>
+  <div id="detail-panel">
+    <button id="panel-toggle" onclick="togglePanel()">&#9664;</button>
+    <div class="panel-content">
+      <h2 id="detail-name">Select a descriptor</h2>
+      <div class="detail-grid" id="detail-grid"></div>
+      <div class="panel-section" id="detail-children-section" style="display:none">
+        <h3>Children</h3>
+        <ul id="detail-children"></ul>
+      </div>
+      <div class="panel-section" id="detail-poly-section" style="display:none">
+        <h3>Also appears in</h3>
+        <div id="detail-poly"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="tooltip">
+  <div class="tt-name"></div>
+  <div class="tt-details"></div>
+</div>
+
+<div id="legend">
+  <h3>Branches</h3>
+  <div id="legend-items"></div>
+</div>
+
+<div id="search-results"></div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://unpkg.com/force-graph@1"></script>
+<script>
+// ── Branch colors ────────────────────────────────────────────────
+const BRANCH_COLORS = {
+  A: '#e15759', B: '#76b7b2', C: '#f28e2b', D: '#4e79a7',
+  E: '#59a14f', F: '#edc948', G: '#b07aa1', H: '#ff9da7',
+  I: '#9c755f', J: '#bab0ac', K: '#af7aa1', L: '#86bcb6',
+  M: '#d37295', N: '#fabfd2', V: '#b6992d', Z: '#499894'
+};
+const BRANCH_NAMES = {
+  A:'Anatomy', B:'Organisms', C:'Diseases', D:'Chemicals and Drugs',
+  E:'Techniques and Equipment', F:'Psychiatry and Psychology',
+  G:'Phenomena and Processes', H:'Disciplines and Occupations',
+  I:'Anthropology, Education, Sociology', J:'Technology, Industry, Agriculture',
+  K:'Humanities', L:'Information Science', M:'Named Groups',
+  N:'Health Care', V:'Publication Characteristics', Z:'Geographicals'
+};
+
+let DATA, currentView = 'sunburst', sunburstRoot, graph2d;
+let NODE_INDEX = {};
+let currentZoomData = null;
+let sizeMode = 'equal';
+let highlightTimer = null;
+let isZooming = false;       // gate hover during zoom transitions
+let resizeTimer = null;       // debounce resize
+const tooltip = document.getElementById('tooltip');
+const fmt = d3.format(',');
+
+// ── Load data ────────────────────────────────────────────────────
+fetch('mesh_tree.json')
+  .then(r => r.json())
+  .then(data => { DATA = data; init(); })
+  .catch(e => document.getElementById('sunburst-view').innerHTML =
+    `<p style="color:#f85149;padding:40px">Error loading mesh_tree.json: ${e.message}<br>
+     Serve this directory: <code>python -m http.server 8080</code></p>`);
+
+// ── Node index for O(1) lookups ─────────────────────────────────
+function buildIndex(node) {
+  if (node.code) NODE_INDEX[node.code] = node;
+  for (const c of (node.children || [])) buildIndex(c);
+}
+
+// ── Polyhierarchy lookup ────────────────────────────────────────
+let POLY_BY_UID = {};
+function buildPolyIndex() {
+  for (const pl of (DATA.polyhierarchy_links || [])) {
+    POLY_BY_UID[pl.uid] = pl;
+  }
+}
+
+function init() {
+  buildIndex(DATA.tree);
+  buildPolyIndex();
+
+  const m = DATA.metadata;
+  document.getElementById('stat-desc').textContent = fmt(m.total_descriptors);
+  document.getElementById('stat-paths').textContent = fmt(m.total_tree_paths);
+  document.getElementById('stat-unique-articles').textContent =
+    m.unique_articles ? fmt(m.unique_articles) : 'N/A';
+  document.getElementById('stat-articles').textContent =
+    m.corpus_articles ? fmt(m.corpus_articles) : 'N/A';
+
+  buildLegend();
+  currentZoomData = DATA.tree;
+  initSunburst();
+  initSearch();
+  initKeyboard();
+  initResizeObserver();
+}
+
+// ── Legend ────────────────────────────────────────────────────────
+function buildLegend() {
+  const el = document.getElementById('legend-items');
+  for (const [code, name] of Object.entries(BRANCH_NAMES)) {
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    item.innerHTML = `<div class="legend-swatch" style="background:${BRANCH_COLORS[code]}"></div>${name}`;
+    item.onclick = () => {
+      const branch = DATA.tree.children.find(c => c.code === code);
+      if (branch && currentView === 'sunburst') zoomTo(branch);
+    };
+    el.appendChild(item);
+  }
+}
+
+// ── Size mode ───────────────────────────────────────────────────
+function getSizeValue(d) {
+  if (sizeMode === 'count') {
+    return Math.max(d.subtree_article_count || d.article_count || 1, 1);
+  }
+  return d.children && d.children.length ? 0 : 1;
+}
+
+function setSizeMode(mode) {
+  sizeMode = mode;
+  document.getElementById('btn-equal').classList.toggle('active', mode === 'equal');
+  document.getElementById('btn-count').classList.toggle('active', mode === 'count');
+  if (currentView === 'sunburst' && currentZoomData) {
+    zoomTo(currentZoomData);
+  }
+}
+
+// ── Sunburst ─────────────────────────────────────────────────────
+const MAX_VISIBLE_DEPTH = 4;
+
+function initSunburst() {
+  const container = document.getElementById('sunburst-view');
+  container.innerHTML = '';
+  const w = container.clientWidth, h = container.clientHeight;
+  if (w === 0 || h === 0) return;
+  const radius = Math.min(w, h) * 0.46;
+
+  const root = d3.hierarchy(DATA.tree)
+    .sum(d => getSizeValue(d))
+    .sort((a, b) => b.value - a.value);
+
+  sunburstRoot = root;
+
+  const partition = d3.partition().size([2 * Math.PI, radius]);
+  partition(root);
+
+  const yScale = d3.scaleLinear()
+    .domain([0, MAX_VISIBLE_DEPTH])
+    .range([0, radius]);
+
+  const arc = d3.arc()
+    .startAngle(d => d.x0)
+    .endAngle(d => d.x1)
+    .padAngle(d => Math.min((d.x1 - d.x0) / 2, 0.005))
+    .padRadius(radius / 2)
+    .innerRadius(d => yScale(d.depth - 1))
+    .outerRadius(d => yScale(d.depth) - 1);
+
+  const svg = d3.select(container).append('svg')
+    .attr('width', w).attr('height', h)
+    .append('g').attr('transform', `translate(${w/2},${h/2})`);
+
+  // Center circle (click to go back)
+  svg.append('circle')
+    .attr('r', radius)
+    .attr('fill', 'none')
+    .attr('pointer-events', 'all')
+    .attr('cursor', 'pointer')
+    .on('click', () => zoomTo(DATA.tree));
+
+  const visibleNodes = root.descendants()
+    .filter(d => d.depth > 0 && d.depth <= MAX_VISIBLE_DEPTH);
+
+  svg.selectAll('path.segment')
+    .data(visibleNodes)
+    .join('path')
+    .attr('class', 'segment')
+    .attr('d', arc)
+    .attr('fill', d => getColor(d.data))
+    .attr('fill-opacity', d => 0.95 - d.depth * 0.08)
+    .attr('stroke', '#0d1117')
+    .attr('stroke-width', 0.5)
+    .attr('cursor', 'pointer')
+    .on('click', onSegmentClick)
+    .on('mouseover', (e, d) => {
+      if (isZooming) return;
+      showTooltip(e, d.data);
+      highlightSegment(d, svg);
+    })
+    .on('mousemove', (e) => moveTooltip(e))
+    .on('mouseout', () => {
+      hideTooltip();
+      if (!isZooming) resetHighlight(svg);
+    });
+
+  // Store references
+  container._svg = svg;
+  container._radius = radius;
+  container._yScale = yScale;
+  container._partition = partition;
+
+  // Center label
+  renderCenterLabel(svg, DATA.tree);
+
+  // Arc labels
+  renderArcLabels(svg, visibleNodes, arc, yScale);
+}
+
+// ── In-place resize (no SVG destruction) ────────────────────────
+function resizeSunburst() {
+  const container = document.getElementById('sunburst-view');
+  if (!container._svg) { initSunburst(); return; }
+
+  const w = container.clientWidth, h = container.clientHeight;
+  if (w === 0 || h === 0) return;
+  const radius = Math.min(w, h) * 0.46;
+
+  // Update SVG dimensions
+  d3.select(container).select('svg').attr('width', w).attr('height', h);
+  container._svg.attr('transform', `translate(${w/2},${h/2})`);
+
+  // Update stored values
+  container._radius = radius;
+  container._yScale = d3.scaleLinear().domain([0, MAX_VISIBLE_DEPTH]).range([0, radius]);
+  container._partition = d3.partition().size([2 * Math.PI, radius]);
+
+  // Update center circle radius
+  container._svg.select('circle').attr('r', radius);
+
+  // Re-render at current zoom position (uses new radius)
+  zoomTo(currentZoomData || DATA.tree);
+}
+
+// ── Segment click handler ───────────────────────────────────────
+function onSegmentClick(e, d) {
+  updateDetailPanel(d.data);
+  if (d.children || (d.data.children && d.data.children.length)) {
+    zoomTo(d.data);
+  }
+}
+
+// ── Center label ────────────────────────────────────────────────
+function renderCenterLabel(svg, data) {
+  svg.selectAll('.center-label').remove();
+  const g = svg.append('g').attr('class', 'center-label');
+
+  if (!data.code) {
+    g.append('text')
+      .attr('text-anchor', 'middle').attr('fill', '#e6edf3').attr('font-size', '16px')
+      .attr('font-weight', '600').attr('dy', '-0.3em')
+      .text('MeSH 2025');
+    const uniq = DATA.metadata.unique_articles;
+    g.append('text')
+      .attr('text-anchor', 'middle').attr('fill', '#8b949e').attr('font-size', '12px')
+      .attr('dy', '1.2em')
+      .text(`${fmt(DATA.metadata.total_descriptors)} descriptors`);
+    if (uniq) {
+      g.append('text')
+        .attr('text-anchor', 'middle').attr('fill', '#58a6ff').attr('font-size', '11px')
+        .attr('dy', '2.8em')
+        .text(`${fmt(uniq)} articles`);
+    }
+  } else {
+    const name = data.name || data.code;
+    const displayName = name.length > 28 ? name.slice(0, 26) + '\u2026' : name;
+    g.append('text')
+      .attr('text-anchor', 'middle').attr('fill', '#e6edf3').attr('font-size', '14px')
+      .attr('font-weight', '600').attr('dy', '-1.0em')
+      .text(displayName);
+    const directCount = data.article_count || 0;
+    if (directCount > 0) {
+      g.append('text')
+        .attr('text-anchor', 'middle').attr('fill', '#58a6ff').attr('font-size', '13px')
+        .attr('dy', '0.5em')
+        .text(`${fmt(directCount)} articles`);
+    }
+    g.append('text')
+      .attr('text-anchor', 'middle').attr('fill', '#484f58').attr('font-size', '11px')
+      .attr('dy', directCount > 0 ? '2.0em' : '1.0em')
+      .attr('cursor', 'pointer')
+      .text('\u2190 back')
+      .on('click', () => {
+        const parentCode = getParentCode(data.code);
+        zoomTo(parentCode ? NODE_INDEX[parentCode] || DATA.tree : DATA.tree);
+      });
+  }
+}
+
+// ── Arc labels ──────────────────────────────────────────────────
+function renderArcLabels(svg, nodes, arc, yScale) {
+  svg.selectAll('.arc-label').remove();
+
+  const labelData = nodes.filter(d => {
+    const angularWidth = d.x1 - d.x0;
+    const minAngle = d.depth === 1 ? 0.08 : 0.12;
+    return angularWidth > minAngle;
+  });
+
+  svg.selectAll('.arc-label')
+    .data(labelData, d => d.data.code)
+    .join('text')
+    .attr('class', 'arc-label')
+    .attr('pointer-events', 'none')
+    .attr('fill', '#fff')
+    .attr('fill-opacity', 0.85)
+    .attr('dominant-baseline', 'central')
+    .each(function(d) {
+      const midAngle = (d.x0 + d.x1) / 2;
+      const midRadius = (yScale(d.depth - 1) + yScale(d.depth) - 1) / 2;
+      const angularWidth = d.x1 - d.x0;
+      const arcLen = angularWidth * midRadius;
+      const fontSize = d.depth === 1 ? 12 : d.depth === 2 ? 10 : 9;
+      const maxChars = Math.floor(arcLen / (fontSize * 0.55));
+      if (maxChars < 3) { d3.select(this).remove(); return; }
+
+      let label = d.data.name || d.data.code;
+      if (label.length > maxChars) label = label.slice(0, maxChars - 1) + '\u2026';
+
+      let rotate = (midAngle * 180 / Math.PI) - 90;
+      const flip = midAngle > Math.PI;
+      if (flip) rotate += 180;
+
+      d3.select(this)
+        .attr('transform', `rotate(${rotate}) translate(${midRadius}, 0)`)
+        .attr('text-anchor', flip ? 'end' : 'start')
+        .attr('font-size', `${fontSize}px`)
+        .text(label);
+    });
+}
+
+// ── Hover highlighting ──────────────────────────────────────────
+function highlightSegment(hoveredNode, svg) {
+  const hoveredCode = hoveredNode.data.code;
+  svg.selectAll('path.segment')
+    .transition('hover').duration(120)
+    .attr('fill-opacity', function(d) {
+      if (d.data.code === hoveredCode) return 1.0;
+      if (hoveredCode && hoveredCode.startsWith(d.data.code + '.')) return 0.7;
+      return 0.2;
+    });
+}
+
+function resetHighlight(svg) {
+  svg.selectAll('path.segment')
+    .transition('hover').duration(200)
+    .attr('fill-opacity', d => 0.95 - d.depth * 0.08);
+}
+
+// ── Zoom ────────────────────────────────────────────────────────
+function zoomTo(targetData) {
+  if (!targetData) targetData = DATA.tree;
+  currentZoomData = targetData;
+
+  const container = document.getElementById('sunburst-view');
+  if (!container._svg || !container._partition) {
+    // SVG not ready — rebuild
+    initSunburst();
+    return;
+  }
+
+  const svg = container._svg;
+  const radius = container._radius;
+  const yScale = container._yScale;
+  const partition = container._partition;
+
+  isZooming = true;
+
+  const newRoot = d3.hierarchy(targetData)
+    .sum(d => getSizeValue(d))
+    .sort((a, b) => b.value - a.value);
+
+  partition.size([2 * Math.PI, radius]);
+  partition(newRoot);
+
+  const arc = d3.arc()
+    .startAngle(d => d.x0)
+    .endAngle(d => d.x1)
+    .padAngle(d => Math.min((d.x1 - d.x0) / 2, 0.005))
+    .padRadius(radius / 2)
+    .innerRadius(d => yScale(d.depth - 1))
+    .outerRadius(d => yScale(d.depth) - 1);
+
+  const visibleNodes = newRoot.descendants()
+    .filter(d => d.depth > 0 && d.depth <= MAX_VISIBLE_DEPTH);
+
+  // Remove arc labels before transition
+  svg.selectAll('.arc-label').remove();
+
+  // Cancel any in-progress hover transitions before zoom
+  svg.selectAll('path.segment').interrupt('hover');
+
+  // Data join with key
+  const paths = svg.selectAll('path.segment')
+    .data(visibleNodes, d => d.data.code);
+
+  paths.exit()
+    .transition('zoom').duration(300)
+    .attr('fill-opacity', 0)
+    .remove();
+
+  const enter = paths.enter().append('path')
+    .attr('class', 'segment')
+    .attr('cursor', 'pointer')
+    .attr('stroke', '#0d1117')
+    .attr('stroke-width', 0.5)
+    .attr('fill-opacity', 0)
+    .on('click', onSegmentClick)
+    .on('mouseover', (e, d) => {
+      if (isZooming) return;
+      showTooltip(e, d.data);
+      highlightSegment(d, svg);
+    })
+    .on('mousemove', (e) => moveTooltip(e))
+    .on('mouseout', () => {
+      hideTooltip();
+      if (!isZooming) resetHighlight(svg);
+    });
+
+  const merged = enter.merge(paths);
+
+  const zoomTransition = merged.transition('zoom').duration(500)
+    .attr('d', arc)
+    .attr('fill', d => getColor(d.data))
+    .attr('fill-opacity', d => 0.95 - d.depth * 0.08);
+
+  // After zoom completes: render labels, unlock hover
+  zoomTransition.end()
+    .then(() => {
+      isZooming = false;
+      renderArcLabels(svg, visibleNodes, arc, yScale);
+    })
+    .catch(() => {
+      // Transition interrupted (rapid clicks) — still unlock and render
+      isZooming = false;
+      renderArcLabels(svg, visibleNodes, arc, yScale);
+    });
+
+  // Update center label immediately (it's not animated)
+  renderCenterLabel(svg, targetData);
+
+  // Update breadcrumb
+  updateBreadcrumb(targetData);
+  document.getElementById('stat-depth').textContent = _maxDepthNode(newRoot);
+}
+
+function _maxDepthNode(node) {
+  if (!node.children) return node.depth;
+  return Math.max(...node.children.map(c => _maxDepthNode(c)));
+}
+
+// ── Breadcrumb (full ancestor path) ─────────────────────────────
+function updateBreadcrumb(data) {
+  const bc = document.getElementById('breadcrumb');
+  let html = `<span onclick="zoomTo(DATA.tree)">MeSH 2025</span>`;
+
+  if (data.code) {
+    const ancestors = getAncestorCodes(data.code);
+    for (const code of ancestors) {
+      const node = NODE_INDEX[code];
+      const name = node ? node.name : code;
+      html += `<span class="bc-sep">&gt;</span>`;
+      html += `<span onclick="zoomTo(NODE_INDEX['${code}'] || DATA.tree)">${name}</span>`;
+    }
+  }
+  bc.innerHTML = html;
+}
+
+function getAncestorCodes(code) {
+  if (!code) return [];
+  const parts = code.split('.');
+  const codes = [];
+  const branch = code[0];
+
+  if (NODE_INDEX[branch] && parts[0] !== branch) {
+    codes.push(branch);
+  }
+
+  let cumulative = '';
+  for (let i = 0; i < parts.length; i++) {
+    cumulative = i === 0 ? parts[i] : cumulative + '.' + parts[i];
+    codes.push(cumulative);
+  }
+  return codes;
+}
+
+function getParentCode(code) {
+  if (!code) return null;
+  const parts = code.split('.');
+  if (parts.length <= 1) return null;
+  return parts.slice(0, -1).join('.');
+}
+
+// ── Detail panel ────────────────────────────────────────────────
+function togglePanel() {
+  const panel = document.getElementById('detail-panel');
+  const btn = document.getElementById('panel-toggle');
+  const wasOpen = panel.classList.contains('open');
+  panel.classList.toggle('open');
+  btn.innerHTML = panel.classList.contains('open') ? '&#9654;' : '&#9664;';
+
+  // After CSS transition completes, resize sunburst in-place (no rebuild)
+  const onDone = () => {
+    panel.removeEventListener('transitionend', onDone);
+    if (currentView === 'sunburst') resizeSunburst();
+  };
+  panel.addEventListener('transitionend', onDone);
+}
+
+function openPanelQuietly() {
+  // Open panel without triggering a resize — used when zoom is also happening
+  const panel = document.getElementById('detail-panel');
+  const btn = document.getElementById('panel-toggle');
+  if (panel.classList.contains('open')) return;
+  panel.classList.add('open');
+  btn.innerHTML = '&#9654;';
+
+  // Schedule a resize after the panel CSS transition finishes
+  const onDone = () => {
+    panel.removeEventListener('transitionend', onDone);
+    if (currentView === 'sunburst') resizeSunburst();
+  };
+  panel.addEventListener('transitionend', onDone);
+}
+
+function updateDetailPanel(data) {
+  if (!data || !data.code) return;
+
+  // Open panel without racing with zoom
+  openPanelQuietly();
+
+  document.getElementById('detail-name').textContent = data.name || data.code;
+
+  const grid = document.getElementById('detail-grid');
+  const directCount = data.article_count || 0;
+  const subtreeCount = data.subtree_article_count || data.article_count || 0;
+  const nChildren = data.children ? data.children.length : 0;
+
+  grid.innerHTML = `
+    <span class="label">Code</span><span class="value">${escHtml(data.code)}</span>
+    <span class="label">UID</span><span class="value">${escHtml(data.uid || '\u2014')}</span>
+    <span class="label">Articles (direct)</span><span class="value">${fmt(directCount)}</span>
+    <span class="label">Tags (incl. subtree)</span><span class="value">${fmt(subtreeCount)}</span>
+    <span class="label">Children</span><span class="value">${nChildren}</span>
+    <span class="label">Branch</span><span class="value" style="color:${BRANCH_COLORS[data.code[0]] || '#888'}">${escHtml(BRANCH_NAMES[data.code[0]] || data.code[0])}</span>
+  `;
+
+  // Children list
+  const childSection = document.getElementById('detail-children-section');
+  const childList = document.getElementById('detail-children');
+  if (data.children && data.children.length > 0) {
+    childSection.style.display = 'block';
+    childList.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    const slice = data.children.slice(0, 100);
+    for (const c of slice) {
+      const li = document.createElement('li');
+      const count = c.subtree_article_count || c.article_count || 0;
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = c.name;
+      const countSpan = document.createElement('span');
+      countSpan.className = 'child-count';
+      countSpan.textContent = count > 0 ? fmt(count) : '';
+      li.appendChild(nameSpan);
+      li.appendChild(countSpan);
+      li.addEventListener('click', () => navigateAndSelect(c.code));
+      frag.appendChild(li);
+    }
+    childList.appendChild(frag);
+  } else {
+    childSection.style.display = 'none';
+  }
+
+  // Polyhierarchy info
+  const polySection = document.getElementById('detail-poly-section');
+  const polyDiv = document.getElementById('detail-poly');
+  const polyInfo = data.uid ? POLY_BY_UID[data.uid] : null;
+  if (polyInfo && polyInfo.branches.length > 1) {
+    polySection.style.display = 'block';
+    polyDiv.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    for (const b of polyInfo.branches) {
+      const tag = document.createElement('span');
+      tag.className = 'poly-tag';
+      tag.style.cssText = `background:${BRANCH_COLORS[b]}33;color:${BRANCH_COLORS[b]};border:1px solid ${BRANCH_COLORS[b]}55`;
+      tag.textContent = BRANCH_NAMES[b];
+      tag.addEventListener('click', () => zoomToBranch(b));
+      frag.appendChild(tag);
+    }
+    polyDiv.appendChild(frag);
+    // Tree positions
+    const posDiv = document.createElement('div');
+    posDiv.style.cssText = 'margin-top:8px;font-size:11px;color:var(--fg2)';
+    for (const p of polyInfo.positions) {
+      const pEl = document.createElement('div');
+      pEl.style.cssText = 'cursor:pointer;padding:2px 0';
+      pEl.textContent = p;
+      pEl.addEventListener('click', () => navigateAndSelect(p));
+      posDiv.appendChild(pEl);
+    }
+    polyDiv.appendChild(posDiv);
+  } else {
+    polySection.style.display = 'none';
+  }
+}
+
+function escHtml(s) {
+  const el = document.createElement('span');
+  el.textContent = s;
+  return el.innerHTML;
+}
+
+function zoomToBranch(branchCode) {
+  const branch = DATA.tree.children.find(c => c.code === branchCode);
+  if (branch) zoomTo(branch);
+}
+
+function navigateAndSelect(code) {
+  const node = NODE_INDEX[code];
+  if (!node) return;
+
+  const parentCode = getParentCode(code);
+  const zoomTarget = parentCode ? NODE_INDEX[parentCode] || DATA.tree : DATA.tree;
+
+  if (currentView === 'sunburst') {
+    zoomTo(zoomTarget);
+    setTimeout(() => highlightSearchResult(code), 550);
+  }
+  updateDetailPanel(node);
+}
+
+// ── 2D Force Graph ───────────────────────────────────────────────
+function initGraph() {
+  if (graph2d) return;
+  const container = document.getElementById('graph-view');
+  const { nodes, links } = buildGraphData(DATA.tree, 3);
+
+  graph2d = ForceGraph()(container)
+    .backgroundColor('#0d1117')
+    .nodeColor(n => BRANCH_COLORS[n.branch] || '#666')
+    .nodeVal(n => Math.max(Math.log2(n.subtree_article_count || n.article_count || 1), 2) * 4)
+    .nodeLabel(n => {
+      const count = n.subtree_article_count || n.article_count || 0;
+      return `${n.name} (${n.code})${count ? ' \u2014 ' + fmt(count) + ' tags' : ''}`;
+    })
+    .nodeCanvasObject((node, ctx, globalScale) => {
+      const r = Math.max(Math.log2(node.subtree_article_count || node.article_count || 1), 2) * 3;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
+      ctx.fillStyle = BRANCH_COLORS[node.branch] || '#666';
+      ctx.globalAlpha = 0.85;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      const depth = (node.code || '').split('.').length;
+      if (depth <= 1) {
+        const fontSize = Math.max(5, 14 / globalScale);
+        ctx.font = `${fontSize}px sans-serif`;
+        ctx.fillStyle = '#e6edf3';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(node.name, node.x, node.y + r + 2);
+      }
+    })
+    .nodeCanvasObjectMode(() => 'replace')
+    .linkColor(l => l.color || 'rgba(255,255,255,0.08)')
+    .linkWidth(l => l.dashed ? 0.5 : 0.3)
+    .linkLineDash(l => l.dashed ? [2, 2] : null)
+    .onNodeClick(n => {
+      updateDetailPanel(n);
+      if (n._collapsed && n._childData) expandNode(n);
+    })
+    .d3Force('charge', d3.forceManyBody().strength(-30))
+    .d3Force('link', d3.forceLink().distance(40).strength(0.5))
+    .graphData({ nodes, links });
+}
+
+function buildGraphData(tree, maxDepth) {
+  const nodes = [], links = [];
+
+  function walk(node, depth, parentId) {
+    const id = node.code || 'root';
+    const branch = id ? id[0] : '';
+    nodes.push({
+      id, name: node.name, code: node.code, uid: node.uid,
+      article_count: node.article_count,
+      subtree_article_count: node.subtree_article_count,
+      branch,
+      _collapsed: depth >= maxDepth && node.children && node.children.length > 0,
+      _childData: depth >= maxDepth ? node.children : null,
+    });
+    if (parentId) links.push({ source: parentId, target: id });
+
+    if (depth < maxDepth && node.children) {
+      for (const child of node.children) {
+        walk(child, depth + 1, id);
+      }
+    }
+  }
+
+  walk(tree, 0, null);
+
+  const nodeIds = new Set(nodes.map(n => n.id));
+  for (const pl of DATA.polyhierarchy_links.slice(0, 500)) {
+    const positions = pl.positions.filter(p => nodeIds.has(p));
+    for (let i = 0; i < positions.length - 1; i++) {
+      links.push({
+        source: positions[i], target: positions[i + 1],
+        color: 'rgba(255,200,50,0.15)', dashed: true
+      });
+    }
+  }
+
+  return { nodes, links };
+}
+
+function expandNode(node) {
+  if (!node._childData) return;
+  const { nodes, links } = graph2d.graphData();
+  const newNodes = [...nodes], newLinks = [...links];
+
+  for (const child of node._childData) {
+    const id = child.code;
+    const branch = id ? id[0] : '';
+    newNodes.push({
+      id, name: child.name, code: child.code, uid: child.uid,
+      article_count: child.article_count,
+      subtree_article_count: child.subtree_article_count,
+      branch,
+      _collapsed: child.children && child.children.length > 0,
+      _childData: child.children,
+      x: node.x + (Math.random() - 0.5) * 50,
+      y: node.y + (Math.random() - 0.5) * 50,
+    });
+    newLinks.push({ source: node.id, target: id });
+  }
+
+  node._collapsed = false;
+  node._childData = null;
+  graph2d.graphData({ nodes: newNodes, links: newLinks });
+}
+
+// ── Shared helpers ───────────────────────────────────────────────
+function getColor(data) {
+  const code = data.code || '';
+  const branch = code ? code[0] : '';
+  return BRANCH_COLORS[branch] || '#444';
+}
+
+function showTooltip(e, data) {
+  const tt = document.getElementById('tooltip');
+  const directCount = data.article_count ? fmt(data.article_count) : '0';
+  const subtreeCount = data.subtree_article_count ? fmt(data.subtree_article_count) : directCount;
+  const nChildren = data.children ? data.children.length : 0;
+  tt.querySelector('.tt-name').textContent = data.name || 'MeSH 2025';
+  tt.querySelector('.tt-details').innerHTML =
+    `<div class="tt-row"><b>Code:</b> ${data.code || '\u2014'}</div>` +
+    `<div class="tt-row"><b>UID:</b> ${data.uid || '\u2014'}</div>` +
+    `<div class="tt-row"><b>Articles (direct):</b> ${directCount}</div>` +
+    `<div class="tt-row"><b>Tags (incl. subtree):</b> ${subtreeCount}</div>` +
+    `<div class="tt-row"><b>Sub-descriptors:</b> ${nChildren}</div>`;
+  tt.style.display = 'block';
+  moveTooltip(e);
+}
+
+function moveTooltip(e) {
+  tooltip.style.left = (e.clientX + 16) + 'px';
+  tooltip.style.top = (e.clientY + 16) + 'px';
+}
+
+function hideTooltip() { tooltip.style.display = 'none'; }
+
+// ── View toggle ──────────────────────────────────────────────────
+function switchView(view) {
+  currentView = view;
+  document.getElementById('sunburst-view').style.display = view === 'sunburst' ? 'block' : 'none';
+  document.getElementById('graph-view').style.display = view === 'graph' ? 'block' : 'none';
+  document.getElementById('btn-sunburst').classList.toggle('active', view === 'sunburst');
+  document.getElementById('btn-graph').classList.toggle('active', view === 'graph');
+
+  if (view === 'graph' && !graph2d) initGraph();
+  if (view === 'sunburst') resizeSunburst();
+}
+
+// ── Search ───────────────────────────────────────────────────────
+let searchDebounce = null;
+function initSearch() {
+  const input = document.getElementById('search');
+  const results = document.getElementById('search-results');
+  const allNodes = [];
+
+  function flatten(node) {
+    if (node.code) allNodes.push({
+      name: node.name, code: node.code, uid: node.uid,
+      count: node.subtree_article_count || node.article_count || 0
+    });
+    for (const child of (node.children || [])) flatten(child);
+  }
+  flatten(DATA.tree);
+
+  input.addEventListener('input', () => {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => {
+      const q = input.value.toLowerCase().trim();
+      if (q.length < 2) { results.style.display = 'none'; return; }
+
+      const matches = allNodes
+        .filter(n => n.name.toLowerCase().includes(q) || n.code.toLowerCase().includes(q))
+        .sort((a, b) => {
+          const aPrefix = a.name.toLowerCase().startsWith(q) ? 1 : 0;
+          const bPrefix = b.name.toLowerCase().startsWith(q) ? 1 : 0;
+          if (aPrefix !== bPrefix) return bPrefix - aPrefix;
+          return b.count - a.count;
+        })
+        .slice(0, 20);
+
+      if (matches.length === 0) { results.style.display = 'none'; return; }
+
+      results.innerHTML = '';
+      const frag = document.createDocumentFragment();
+      for (const m of matches) {
+        const div = document.createElement('div');
+        div.className = 'search-item';
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = m.name + ' ';
+        const codeSpan = document.createElement('span');
+        codeSpan.className = 'si-code';
+        codeSpan.textContent = m.code;
+        nameSpan.appendChild(codeSpan);
+        div.appendChild(nameSpan);
+        if (m.count > 0) {
+          const countSpan = document.createElement('span');
+          countSpan.className = 'si-count';
+          countSpan.textContent = fmt(m.count);
+          div.appendChild(countSpan);
+        }
+        div.addEventListener('mousedown', (e) => {
+          e.preventDefault(); // prevent blur from firing before click
+          navigateTo(m.code);
+        });
+        frag.appendChild(div);
+      }
+      results.appendChild(frag);
+      results.style.display = 'block';
+    }, 120);
+  });
+
+  input.addEventListener('blur', () => {
+    setTimeout(() => { results.style.display = 'none'; }, 150);
+  });
+}
+
+function navigateTo(code) {
+  document.getElementById('search').value = '';
+  document.getElementById('search-results').style.display = 'none';
+
+  const node = NODE_INDEX[code];
+  if (!node) return;
+
+  const parentCode = getParentCode(code);
+  const zoomTarget = parentCode ? NODE_INDEX[parentCode] || DATA.tree : DATA.tree;
+
+  if (currentView === 'sunburst') {
+    zoomTo(zoomTarget);
+    setTimeout(() => highlightSearchResult(code), 550);
+  }
+
+  updateDetailPanel(node);
+}
+
+// ── Search result highlighting ──────────────────────────────────
+function highlightSearchResult(code) {
+  if (highlightTimer) clearTimeout(highlightTimer);
+
+  const container = document.getElementById('sunburst-view');
+  const svg = container._svg;
+  if (!svg) return;
+
+  // Reset any existing highlights first
+  svg.selectAll('path.segment')
+    .classed('highlight-pulse', false)
+    .attr('stroke', '#0d1117')
+    .attr('stroke-width', 0.5);
+
+  // Apply highlight to target
+  svg.selectAll('path.segment')
+    .filter(d => d.data.code === code)
+    .classed('highlight-pulse', true)
+    .attr('stroke', 'gold')
+    .attr('stroke-width', 3);
+
+  highlightTimer = setTimeout(() => {
+    svg.selectAll('path.segment')
+      .classed('highlight-pulse', false)
+      .attr('stroke', '#0d1117')
+      .attr('stroke-width', 0.5);
+  }, 2000);
+}
+
+// ── Keyboard navigation ─────────────────────────────────────────
+function initKeyboard() {
+  document.addEventListener('keydown', (e) => {
+    if (document.activeElement === document.getElementById('search')) {
+      if (e.key === 'Escape') {
+        document.getElementById('search').blur();
+        document.getElementById('search-results').style.display = 'none';
+      }
+      return;
+    }
+
+    if (e.key === 'Escape') {
+      if (currentZoomData && currentZoomData.code) {
+        const parentCode = getParentCode(currentZoomData.code);
+        zoomTo(parentCode ? NODE_INDEX[parentCode] || DATA.tree : DATA.tree);
+      }
+    } else if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault();
+      document.getElementById('search').focus();
+    } else if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      document.getElementById('search').focus();
+    }
+  });
+}
+
+// ── Resize (debounced via ResizeObserver) ────────────────────────
+function initResizeObserver() {
+  const container = document.getElementById('sunburst-view');
+  const observer = new ResizeObserver(() => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (currentView === 'sunburst') resizeSunburst();
+    }, 200);
+  });
+  observer.observe(container);
+
+  // Also handle force graph resize
+  const graphContainer = document.getElementById('graph-view');
+  const graphObserver = new ResizeObserver(() => {
+    if (graph2d) {
+      graph2d.width(graphContainer.clientWidth).height(graphContainer.clientHeight);
+    }
+  });
+  graphObserver.observe(graphContainer);
+}
+</script>
+</body>
+</html>
