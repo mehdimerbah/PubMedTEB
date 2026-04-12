@@ -18,7 +18,7 @@ def build_parser() -> argparse.ArgumentParser:
     """Build the CLI argument parser."""
     parser = argparse.ArgumentParser(
         prog="pubmed-etl",
-        description="PubMed XML to Parquet preprocessing pipeline for BioMTEB.",
+        description="PubMed XML to Parquet preprocessing pipeline for PubMedTEB.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -141,11 +141,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if result.passed else 1
 
     elif args.command == "mesh":
-        from preprocessing.mesh_categories import build_uid_to_categories, save_mapping
+        from preprocessing.mesh_categories import build_all_mappings, save_mapping
 
-        mapping = build_uid_to_categories(args.desc_xml)
-        save_mapping(mapping, args.output)
-        print(f"MeSH mapping: {len(mapping)} descriptors -> {args.output}")
+        uid_to_categories, depth2_names, uid_to_subcategories = build_all_mappings(
+            args.desc_xml
+        )
+        save_mapping(uid_to_categories, args.output, depth2_names, uid_to_subcategories)
+        print(
+            f"MeSH mapping: {len(uid_to_categories)} descriptors, "
+            f"{len(depth2_names)} depth-2 codes -> {args.output}"
+        )
         return 0
 
     return 1
