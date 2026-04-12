@@ -12,11 +12,13 @@ wheels/
 # Jupyter
 .ipynb_checkpoints/
 
-# Data 
+# Data
 *.parquet
 *.xml
 archive/
 */data/
+datasets/
+results/
 
 # MeSH artifacts
 mesh_explorer/mesh_tree.json
