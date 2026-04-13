@@ -21,4 +21,6 @@ dependencies = [
     "datasets>=2.0.0",
     "torch>=2.0.0",
     "umap-learn>=0.5.11",
+    "peft>=0.7.0",
+    "einops>=0.7.0",
 ]
