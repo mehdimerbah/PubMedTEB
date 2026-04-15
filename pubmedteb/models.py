@@ -21,16 +21,17 @@ MODELS: dict[str, dict] = {
         "model_id": "michiyasunaga/BioLinkBERT-large",
     },
     "medembed-small": {
-        "model_id": "Henrychur/MedEmbed-small-v0.1",
+        "model_id": "abhinand/MedEmbed-small-v0.1",
     },
     "medembed-large": {
-        "model_id": "Henrychur/MedEmbed-large-v0.1",
+        "model_id": "abhinand/MedEmbed-large-v0.1",
     },
     "biosimcse": {
         "model_id": "kamalkraj/BioSimCSE-BioLinkBERT-BASE",
     },
     # ── Scientific ──
     "specter2": {
+        # SPECTER2 is a PEFT adapter model — requires the `peft` package.
         "model_id": "allenai/specter2",
     },
     "scincl": {
@@ -42,7 +43,9 @@ MODELS: dict[str, dict] = {
         "encode_kwargs": {"normalize_embeddings": True},
     },
     "jina-v3": {
+        # Uses custom modeling code in the model repo.
         "model_id": "jinaai/jina-embeddings-v3",
+        "model_kwargs": {"trust_remote_code": True},
     },
 }
 
@@ -58,13 +61,16 @@ def get_model(name_or_path: str) -> SentenceTransformer:
         A loaded SentenceTransformer model.
     """
     if name_or_path in MODELS:
-        model_id = MODELS[name_or_path]["model_id"]
+        entry = MODELS[name_or_path]
+        model_id = entry["model_id"]
+        model_kwargs = entry.get("model_kwargs", {})
         logger.info("Loading model '%s' (%s)", name_or_path, model_id)
     else:
         model_id = name_or_path
+        model_kwargs = {}
         logger.info("Loading model from '%s'", model_id)
 
-    return SentenceTransformer(model_id)
+    return SentenceTransformer(model_id, **model_kwargs)
 
 
 def list_models() -> list[str]:
