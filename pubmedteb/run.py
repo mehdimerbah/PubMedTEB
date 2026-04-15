@@ -122,6 +122,7 @@ def _run_build(args: argparse.Namespace) -> int:
 def _run_evaluate(args: argparse.Namespace) -> int:
     """Execute the evaluate subcommand."""
     import mteb
+    import torch
 
     from pubmedteb.models import MODELS, get_model
     from pubmedteb.tasks import get_task
@@ -164,6 +165,11 @@ def _run_evaluate(args: argparse.Namespace) -> int:
 
         _print_summary(model_name, results)
 
+        # Free GPU memory before loading the next model
+        del model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
     return 0
 
 
@@ -190,13 +196,25 @@ def _run_build_infra(args: argparse.Namespace) -> int:
                 Path(__file__).resolve().parent.parent
                 / "preprocessing" / "data" / "mesh_uid_categories.json"
             )
-            uid_to_categories, depth2_names, uid_to_subcategories = build_all_mappings(
-                desc_xml
+            (
+                uid_to_categories,
+                depth2_names,
+                uid_to_subcategories,
+                depth3_names,
+                uid_to_subsubcategories,
+            ) = build_all_mappings(desc_xml)
+            save_mapping(
+                uid_to_categories,
+                cache_path,
+                depth2_names,
+                uid_to_subcategories,
+                depth3_names,
+                uid_to_subsubcategories,
             )
-            save_mapping(uid_to_categories, cache_path, depth2_names, uid_to_subcategories)
             print(
                 f"MeSH: {len(uid_to_categories)} descriptors, "
-                f"{len(depth2_names)} depth-2 codes -> {cache_path}"
+                f"{len(depth2_names)} depth-2, "
+                f"{len(depth3_names)} depth-3 -> {cache_path}"
             )
 
         elif component == "citations":

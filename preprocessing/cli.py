@@ -143,13 +143,25 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "mesh":
         from preprocessing.mesh_categories import build_all_mappings, save_mapping
 
-        uid_to_categories, depth2_names, uid_to_subcategories = build_all_mappings(
-            args.desc_xml
+        (
+            uid_to_categories,
+            depth2_names,
+            uid_to_subcategories,
+            depth3_names,
+            uid_to_subsubcategories,
+        ) = build_all_mappings(args.desc_xml)
+        save_mapping(
+            uid_to_categories,
+            args.output,
+            depth2_names,
+            uid_to_subcategories,
+            depth3_names,
+            uid_to_subsubcategories,
         )
-        save_mapping(uid_to_categories, args.output, depth2_names, uid_to_subcategories)
         print(
             f"MeSH mapping: {len(uid_to_categories)} descriptors, "
-            f"{len(depth2_names)} depth-2 codes -> {args.output}"
+            f"{len(depth2_names)} depth-2, "
+            f"{len(depth3_names)} depth-3 -> {args.output}"
         )
         return 0
 
