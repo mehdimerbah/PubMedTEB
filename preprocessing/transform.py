@@ -7,8 +7,7 @@ explicit and independently testable.
 
 from __future__ import annotations
 
-from collections import Counter
-
+from preprocessing.mesh_categories import majority_vote
 from preprocessing.schema import ArticleRecord
 
 
@@ -29,18 +28,4 @@ def assign_semantic_category(
     Returns:
         A category string (e.g., "Diseases") or "" if no mapping exists.
     """
-    if not record.mesh_descriptors:
-        return ""
-
-    votes: Counter[str] = Counter()
-    for desc in record.mesh_descriptors:
-        cats = uid_to_categories.get(desc.uid, [])
-        for cat in cats:
-            votes[cat] += 1
-
-    if not votes:
-        return ""
-
-    max_count = max(votes.values())
-    winners = sorted(cat for cat, cnt in votes.items() if cnt == max_count)
-    return winners[0]
+    return majority_vote([d.uid for d in record.mesh_descriptors], uid_to_categories)

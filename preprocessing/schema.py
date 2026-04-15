@@ -7,9 +7,10 @@ target Parquet schema. All modules communicate through these types.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from collections import Counter
 
 import pyarrow as pa
+
+from preprocessing.mesh_categories import majority_vote
 
 
 # ── Data classes ──────────────────────────────────────────────────────────
@@ -90,21 +91,7 @@ def _assign_category(
     The branch with the most votes wins; ties broken alphabetically.
     Returns "" if no descriptors map to any category.
     """
-    if not mesh_descs:
-        return ""
-
-    votes: Counter[str] = Counter()
-    for desc in mesh_descs:
-        cats = uid_to_categories.get(desc.uid, [])
-        for cat in cats:
-            votes[cat] += 1
-
-    if not votes:
-        return ""
-
-    max_count = max(votes.values())
-    winners = sorted(cat for cat, cnt in votes.items() if cnt == max_count)
-    return winners[0]
+    return majority_vote([d.uid for d in mesh_descs], uid_to_categories)
 
 
 def records_to_arrow_batch(

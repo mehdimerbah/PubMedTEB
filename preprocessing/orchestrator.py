@@ -130,7 +130,8 @@ def run_pipeline(
     logger.info("Pipeline starting: %d files, %d workers", total_files, workers)
 
     # Step 2: Initialize MeSH mapping
-    uid_to_categories = init_mapping(mesh_desc_path, mesh_cache_path)
+    mesh_payload = init_mapping(mesh_desc_path, mesh_cache_path)
+    uid_to_categories = mesh_payload["uid_to_categories"]
     logger.info("MeSH mapping ready: %d descriptors", len(uid_to_categories))
 
     # Step 3-4: Parse in parallel, write sequentially
