@@ -24,7 +24,8 @@ results/
 
 # Ephemeral / local
 logs/
-
+notebooks/
+scripts/
 
 # MeSH artifacts
 mesh_explorer/mesh_tree.json
