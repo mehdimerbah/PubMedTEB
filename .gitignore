@@ -17,8 +17,14 @@ wheels/
 *.xml
 archive/
 */data/
-datasets/
+datasets/*
+!datasets/pubmed_title_retrieval/
+!datasets/pubmed_title_retrieval/**
 results/
+
+# Ephemeral / local
+logs/
+
 
 # MeSH artifacts
 mesh_explorer/mesh_tree.json
