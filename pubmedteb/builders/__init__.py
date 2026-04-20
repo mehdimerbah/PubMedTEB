@@ -5,10 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from pubmedteb.builders.base import DatasetBuilder
+from pubmedteb.builders.citation_retrieval import CitationRetrievalBuilder
 from pubmedteb.builders.title_retrieval import TitleRetrievalBuilder
 
 BUILDERS: dict[str, type[DatasetBuilder]] = {
     "title-retrieval": TitleRetrievalBuilder,
+    "citation-retrieval": CitationRetrievalBuilder,
 }
 
 

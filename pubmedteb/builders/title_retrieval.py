@@ -1,7 +1,10 @@
 """Title-to-abstract retrieval dataset builder.
 
 Query = article title, relevant document = same article's abstract.
-Hard negatives stratified by semantic category (60%), journal (20%), random (20%).
+
+Hard-negative mix (T3 recipe, see ``reports/mesh_investigation/tables/
+T3_hardneg_mix_per_task.csv``): 30 % same-descriptor, 20 % shared depth-3,
+20 % BM25, 10 % same-journal, 20 % random.
 """
 
 from __future__ import annotations
@@ -9,9 +12,25 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from pubmedteb.analysis.mesh import load_mesh_mappings
 from pubmedteb.builders.base import DatasetBuilder
+from pubmedteb.builders.negative_sampling import (
+    NegativeSampler,
+    depth3_labels_of,
+    descriptor_uids_of,
+    split_mix,
+)
+from pubmedteb.infra.bm25_index import open_bm25_index
 
 logger = logging.getLogger(__name__)
+
+MIX = {
+    "descriptor": 0.30,
+    "depth3": 0.20,
+    "bm25": 0.20,
+    "journal": 0.10,
+    "random": 0.20,
+}
 
 
 class TitleRetrievalBuilder(DatasetBuilder):
@@ -19,8 +38,7 @@ class TitleRetrievalBuilder(DatasetBuilder):
 
     Each query is an article title; the single relevant document is the
     same article's abstract (1:1 ground truth). The corpus is padded with
-    hard-negative distractors sampled by semantic category, journal, and
-    random selection.
+    hard-negative distractors per the T3 mix.
     """
 
     SIZES = {
@@ -35,72 +53,92 @@ class TitleRetrievalBuilder(DatasetBuilder):
         n_queries = cfg["n_queries"]
         n_distractors = cfg["n_corpus"] - n_queries
 
-        # Phase 1: Sample query articles
-        query_articles = self._sample_query_articles(n_queries)
-        logger.info("Sampled %d query articles", len(query_articles))
+        query_rows = self._sample_query_articles(n_queries)
+        logger.info("Sampled %d query articles", len(query_rows))
 
-        # Phase 2: Build queries, corpus targets, qrels
         queries: dict[str, str] = {}
         corpus: dict[str, dict] = {}
         qrels: dict[str, dict[str, int]] = {}
-
-        for pmid, title, abstract, category, journal in query_articles:
+        for pmid, title, abstract, _journal, _descs in query_rows:
             queries[pmid] = title
             corpus[pmid] = {"text": abstract}
             qrels[pmid] = {pmid: 1}
 
-        # Collect metadata for hard negative sampling
-        query_pmids = set(queries.keys())
-        query_categories = {cat for _, _, _, cat, _ in query_articles if cat}
-        query_journals = {journal for _, _, _, _, journal in query_articles if journal}
+        mappings = load_mesh_mappings()
+        sampler = NegativeSampler(self.con, self.parquet_path, self.seed, mappings)
 
-        # Phase 3: Sample distractors
-        n_cat = int(n_distractors * 0.6)
-        n_journal = int(n_distractors * 0.2)
-        n_random = n_distractors - n_cat - n_journal
-
-        selected_pmids = set(query_pmids)
-
-        cat_distractors = self._sample_by_category(
-            query_categories, selected_pmids, n_cat,
+        query_pmids: set[str] = set(queries)
+        descriptor_uids = descriptor_uids_of(query_rows, desc_col_index=4)
+        depth3_labels = depth3_labels_of(
+            query_rows, desc_col_index=4, uid_to_depth3=mappings.uid_to_depth3,
         )
-        selected_pmids.update(d[0] for d in cat_distractors)
-        logger.info("Sampled %d category distractors", len(cat_distractors))
-
-        journal_distractors = self._sample_by_journal(
-            query_journals, selected_pmids, n_journal,
+        journals = {row[3] for row in query_rows if row[3]}
+        logger.info(
+            "Negative context: %d descriptor UIDs, %d depth-3 labels, %d journals",
+            len(descriptor_uids), len(depth3_labels), len(journals),
         )
-        selected_pmids.update(d[0] for d in journal_distractors)
-        logger.info("Sampled %d journal distractors", len(journal_distractors))
 
-        random_distractors = self._sample_random(selected_pmids, n_random)
-        logger.info("Sampled %d random distractors", len(random_distractors))
+        counts = split_mix(n_distractors, MIX)
+        logger.info("Negative mix (%d distractors): %s", n_distractors, counts)
 
-        # Phase 4: Assemble corpus
-        for pmid, abstract in cat_distractors + journal_distractors + random_distractors:
+        selected: set[str] = set(query_pmids)
+
+        desc_neg = sampler.sample_by_descriptor(
+            descriptor_uids, selected, counts["descriptor"],
+        )
+        selected.update(p for p, _ in desc_neg)
+        logger.info("descriptor negatives: %d", len(desc_neg))
+
+        d3_neg = sampler.sample_by_depth3(
+            depth3_labels, selected, counts["depth3"],
+        )
+        selected.update(p for p, _ in d3_neg)
+        logger.info("depth-3 negatives: %d", len(d3_neg))
+
+        bm25_con = open_bm25_index()
+        try:
+            bm25_neg = sampler.sample_by_bm25(
+                bm25_con,
+                [(qid, queries[qid]) for qid in queries],
+                selected,
+                counts["bm25"],
+            )
+        finally:
+            bm25_con.close()
+        selected.update(p for p, _ in bm25_neg)
+        logger.info("BM25 negatives: %d", len(bm25_neg))
+
+        journal_neg = sampler.sample_by_journal(
+            journals, selected, counts["journal"],
+        )
+        selected.update(p for p, _ in journal_neg)
+        logger.info("journal negatives: %d", len(journal_neg))
+
+        random_neg = sampler.sample_random(selected, counts["random"])
+        logger.info("random negatives: %d", len(random_neg))
+
+        for pmid, abstract in desc_neg + d3_neg + bm25_neg + journal_neg + random_neg:
             corpus[pmid] = {"text": abstract}
 
         return queries, corpus, qrels
 
     def _sample_query_articles(self, n: int) -> list[tuple]:
-        """Sample articles suitable as queries.
+        """Sample articles usable as queries.
 
-        Filters: title >= 5 words, has semantic_category, abstract >= 150 chars.
-        Uses deterministic hash-based ordering for reproducibility.
+        Filters: abstract ≥ 150 chars, title ≥ 5 words, has ≥ 1 descriptor.
+        Titles deduplicated case-insensitively.
         """
-        # Over-sample to account for duplicate title filtering
         oversample = int(n * 1.1)
         rows = self.query(f"""
-            SELECT pmid, title, abstract_text, semantic_category, journal
+            SELECT pmid, title, abstract_text, journal, mesh_descriptors
             FROM {{parquet}}
             WHERE length(abstract_text) >= 150
-              AND semantic_category != ''
+              AND len(mesh_descriptors) >= 1
               AND array_length(string_split(title, ' ')) >= 5
             ORDER BY hash(pmid || '{self.seed}')
             LIMIT {oversample}
         """)
 
-        # Deduplicate titles
         seen_titles: set[str] = set()
         result: list[tuple] = []
         for row in rows:
@@ -110,74 +148,4 @@ class TitleRetrievalBuilder(DatasetBuilder):
                 result.append(row)
                 if len(result) >= n:
                     break
-
         return result
-
-    def _sample_by_category(
-        self,
-        categories: set[str],
-        exclude_pmids: set[str],
-        n: int,
-    ) -> list[tuple[str, str]]:
-        """Sample distractors from the same semantic categories as query articles."""
-        if not categories or n <= 0:
-            return []
-
-        cat_list = ", ".join(f"'{c}'" for c in categories)
-        exclude_list = ", ".join(f"'{p}'" for p in exclude_pmids)
-
-        rows = self.query(f"""
-            SELECT pmid, abstract_text
-            FROM {{parquet}}
-            WHERE semantic_category IN ({cat_list})
-              AND pmid NOT IN ({exclude_list})
-              AND length(abstract_text) >= 150
-            ORDER BY hash(pmid || '{self.seed}_cat')
-            LIMIT {n}
-        """)
-        return [(r[0], r[1]) for r in rows]
-
-    def _sample_by_journal(
-        self,
-        journals: set[str],
-        exclude_pmids: set[str],
-        n: int,
-    ) -> list[tuple[str, str]]:
-        """Sample distractors from the same journals as query articles."""
-        if not journals or n <= 0:
-            return []
-
-        journal_list = ", ".join(f"'{j.replace(chr(39), chr(39)+chr(39))}'" for j in journals)
-        exclude_list = ", ".join(f"'{p}'" for p in exclude_pmids)
-
-        rows = self.query(f"""
-            SELECT pmid, abstract_text
-            FROM {{parquet}}
-            WHERE journal IN ({journal_list})
-              AND pmid NOT IN ({exclude_list})
-              AND length(abstract_text) >= 150
-            ORDER BY hash(pmid || '{self.seed}_journal')
-            LIMIT {n}
-        """)
-        return [(r[0], r[1]) for r in rows]
-
-    def _sample_random(
-        self,
-        exclude_pmids: set[str],
-        n: int,
-    ) -> list[tuple[str, str]]:
-        """Sample random distractors from the full corpus."""
-        if n <= 0:
-            return []
-
-        exclude_list = ", ".join(f"'{p}'" for p in exclude_pmids)
-
-        rows = self.query(f"""
-            SELECT pmid, abstract_text
-            FROM {{parquet}}
-            WHERE pmid NOT IN ({exclude_list})
-              AND length(abstract_text) >= 150
-            ORDER BY hash(pmid || '{self.seed}_random')
-            LIMIT {n}
-        """)
-        return [(r[0], r[1]) for r in rows]
