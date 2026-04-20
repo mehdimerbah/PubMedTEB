@@ -26,6 +26,8 @@ results/
 logs/
 notebooks/
 scripts/
+reports/
+analysis/
 
 # MeSH artifacts
 mesh_explorer/mesh_tree.json
