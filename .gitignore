@@ -30,7 +30,7 @@ reports/
 analysis/
 
 # MeSH artifacts
-mesh_explorer/mesh_tree.json
+tools/mesh_explorer/mesh_tree.json
 
 # OS
 .DS_Store
