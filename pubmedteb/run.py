@@ -78,6 +78,32 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
     )
 
+    # ── evaluate-bm25 ────────────────────────────────────────────────
+    bm25_p = sub.add_parser(
+        "evaluate-bm25",
+        help="Run the BM25 lexical baseline on a built dataset",
+    )
+    bm25_p.add_argument(
+        "--task", required=True,
+        help="Task name (e.g., PubMedCitationRetrieval)",
+    )
+    bm25_p.add_argument(
+        "--dataset-dir", type=Path, default=None,
+        help="Override dataset directory (default: datasets/pubmed_{slug})",
+    )
+    bm25_p.add_argument(
+        "--output-dir", type=Path, default=Path("results"),
+        help="Results output directory (default: results/)",
+    )
+    bm25_p.add_argument(
+        "--top-k", type=int, default=1000,
+        help="BM25 cutoff per query (default: 1000)",
+    )
+    bm25_p.add_argument(
+        "--log-level", default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+    )
+
     # ── build-infra ──────────────────────────────────────────────────
     infra_p = sub.add_parser(
         "build-infra",
@@ -170,6 +196,41 @@ def _run_evaluate(args: argparse.Namespace) -> int:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
+    return 0
+
+
+def _run_evaluate_bm25(args: argparse.Namespace) -> int:
+    """Execute the evaluate-bm25 subcommand."""
+    from pubmedteb.eval_bm25 import evaluate_bm25
+
+    dataset_dir = args.dataset_dir
+    if dataset_dir is None:
+        # Map MTEB task name (e.g. PubMedCitationRetrieval) → datasets/pubmed_citation_retrieval
+        import re
+        base = args.task[len("PubMed"):] if args.task.startswith("PubMed") else args.task
+        slug = re.sub(r"(?<!^)(?=[A-Z])", "_", base).lower()
+        dataset_dir = Path("datasets") / f"pubmed_{slug}"
+
+    metrics = evaluate_bm25(
+        dataset_dir=dataset_dir,
+        task_name=args.task,
+        output_dir=args.output_dir,
+        top_k=args.top_k,
+    )
+
+    print(f"\n{'='*60}")
+    print("Model: bm25")
+    print(f"{'='*60}\n")
+    print(f"Task: {args.task}")
+    print(f"  test: main_score = {metrics.get('main_score', 0.0):.4f}")
+    for key in [
+        "ndcg_at_10", "ndcg_at_100",
+        "map_at_10", "mrr_at_10",
+        "recall_at_10", "recall_at_100",
+        "accuracy",
+    ]:
+        if key in metrics:
+            print(f"    {key}: {metrics[key]:.4f}")
     return 0
 
 
@@ -278,6 +339,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_build(args)
     elif args.command == "evaluate":
         return _run_evaluate(args)
+    elif args.command == "evaluate-bm25":
+        return _run_evaluate_bm25(args)
     elif args.command == "build-infra":
         return _run_build_infra(args)
     return 1
