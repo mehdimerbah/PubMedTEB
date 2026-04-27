@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 
 from pubmedteb.analysis.mesh import load_mesh_mappings
-from pubmedteb.builders.base import DatasetBuilder
+from pubmedteb.builders.base import WHERE_HAS_DESCRIPTOR, DatasetBuilder
 from pubmedteb.builders.negative_sampling import (
     NegativeSampler,
     depth3_labels_of,
@@ -133,7 +133,7 @@ class TitleRetrievalBuilder(DatasetBuilder):
             SELECT pmid, title, abstract_text, journal, mesh_descriptors
             FROM {{parquet}}
             WHERE length(abstract_text) >= 150
-              AND len(mesh_descriptors) >= 1
+              AND {WHERE_HAS_DESCRIPTOR}
               AND array_length(string_split(title, ' ')) >= 5
             ORDER BY hash(pmid || '{self.seed}')
             LIMIT {oversample}

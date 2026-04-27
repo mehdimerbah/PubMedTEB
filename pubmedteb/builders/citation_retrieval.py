@@ -14,7 +14,7 @@ import logging
 from pathlib import Path
 
 from pubmedteb.analysis.mesh import load_mesh_mappings
-from pubmedteb.builders.base import DatasetBuilder
+from pubmedteb.builders.base import WHERE_HAS_DESCRIPTOR, DatasetBuilder
 from pubmedteb.builders.negative_sampling import (
     NegativeSampler,
     depth3_labels_of,
@@ -26,14 +26,6 @@ from pubmedteb.infra.citation_graph import ensure_citation_graph
 
 logger = logging.getLogger(__name__)
 
-MIX = {
-    "descriptor": 0.50,
-    "depth3": 0.10,
-    "bm25": 0.10,
-    "journal": 0.05,
-    "random": 0.25,
-}
-
 
 class CitationRetrievalBuilder(DatasetBuilder):
     """Build a citation retrieval dataset.
@@ -42,6 +34,14 @@ class CitationRetrievalBuilder(DatasetBuilder):
     the abstracts of its in-corpus cited papers (bounded to *max_pos*).
     The corpus is padded with hard-negative distractors per the T3 mix.
     """
+
+    MIX: dict[str, float] = {
+        "descriptor": 0.50,
+        "depth3": 0.10,
+        "bm25": 0.10,
+        "journal": 0.05,
+        "random": 0.25,
+    }
 
     SIZES = {
         "mini": {
@@ -56,7 +56,7 @@ class CitationRetrievalBuilder(DatasetBuilder):
             "min_pos": 10,
             "max_pos": 30,
         },
-    }
+    }7
 
     def construct(
         self,
@@ -117,7 +117,7 @@ class CitationRetrievalBuilder(DatasetBuilder):
             len(descriptor_uids), len(depth3_labels), len(journals),
         )
 
-        counts = split_mix(n_distractors, MIX)
+        counts = split_mix(n_distractors, self.MIX)
         logger.info("Negative mix (%d distractors): %s", n_distractors, counts)
 
         # Exclude every positive (direct cite) so negatives are "topically similar
@@ -183,7 +183,7 @@ class CitationRetrievalBuilder(DatasetBuilder):
             FROM '{self.parquet_path}'
             WHERE len(cited_pmids) >= {min_pos}
               AND length(abstract_text) >= 150
-              AND len(mesh_descriptors) >= 1
+              AND {WHERE_HAS_DESCRIPTOR}
               AND array_length(string_split(title, ' ')) >= 5
             ORDER BY hash(pmid || '{self.seed}_cr_cand')
             LIMIT {oversample}

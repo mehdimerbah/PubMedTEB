@@ -21,6 +21,20 @@ PARQUET_PATH = Path(
     "/gpfs01/berens/data/data/pubmed_processed/pubmed_teb_filtered.parquet"
 )
 
+# Reusable SQL WHERE-clause 
+WHERE_HAS_DESCRIPTOR = "len(mesh_descriptors) >= 1"
+WHERE_HAS_MAJOR = "len(list_filter(mesh_descriptors, x -> x.is_major)) >= 1"
+
+
+def write_jsonl(path: Path, rows) -> int:
+    """Write an iterable of dicts to JSONL at *path*, returning the row count."""
+    n = 0
+    with open(path, "w") as f:
+        for row in rows:
+            f.write(json.dumps(row) + "\n")
+            n += 1
+    return n
+
 
 class DatasetBuilder(ABC):
     """Abstract base class for all PubMedTEB dataset builders.
@@ -90,21 +104,29 @@ class DatasetBuilder(ABC):
         queries: dict[str, str],
         corpus: dict[str, dict],
         qrels: dict[str, dict[str, int]],
+        top_ranked: dict[str, list[str]] | None = None,
     ) -> None:
-        """Write queries, corpus, and qrels to standard files."""
+        """Write queries, corpus, qrels, and (optionally) top_ranked to disk.
+
+        *top_ranked* — when provided — writes ``top_ranked.jsonl`` with one
+        line per query: ``{"qid": str, "docids": [str, ...]}``. Used by
+        MTEB reranking tasks to restrict scoring to a candidate subset.
+        """
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         queries_path = self.output_dir / "queries.jsonl"
-        with open(queries_path, "w") as f:
-            for qid, text in queries.items():
-                f.write(json.dumps({"_id": qid, "text": text}) + "\n")
-        logger.info("Wrote %d queries to %s", len(queries), queries_path)
+        n_q = write_jsonl(
+            queries_path,
+            ({"_id": qid, "text": text} for qid, text in queries.items()),
+        )
+        logger.info("Wrote %d queries to %s", n_q, queries_path)
 
         corpus_path = self.output_dir / "corpus.jsonl"
-        with open(corpus_path, "w") as f:
-            for doc_id, doc in corpus.items():
-                f.write(json.dumps({"_id": doc_id, "text": doc["text"]}) + "\n")
-        logger.info("Wrote %d corpus docs to %s", len(corpus), corpus_path)
+        n_c = write_jsonl(
+            corpus_path,
+            ({"_id": doc_id, "text": doc["text"]} for doc_id, doc in corpus.items()),
+        )
+        logger.info("Wrote %d corpus docs to %s", n_c, corpus_path)
 
         qrels_path = self.output_dir / "qrels.tsv"
         with open(qrels_path, "w") as f:
@@ -112,6 +134,14 @@ class DatasetBuilder(ABC):
                 for doc_id, score in docs.items():
                     f.write(f"{qid}\t{doc_id}\t{score}\n")
         logger.info("Wrote qrels to %s", qrels_path)
+
+        if top_ranked is not None:
+            top_ranked_path = self.output_dir / "top_ranked.jsonl"
+            n_t = write_jsonl(
+                top_ranked_path,
+                ({"qid": qid, "docids": docids} for qid, docids in top_ranked.items()),
+            )
+            logger.info("Wrote top_ranked for %d queries to %s", n_t, top_ranked_path)
 
     def query(self, sql: str) -> list[tuple]:
         """Execute a SQL query against the Parquet file.
