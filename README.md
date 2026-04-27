@@ -6,20 +6,26 @@ A biomedical text embedding benchmark built as an [MTEB](https://github.com/embe
 
 This project is under active development as part of my Master's thesis at the University of Tuebingen.
 
-**Current stage**: Preprocessing: the PubMed XML-to-Parquet ETL pipeline and data filtering are complete. Benchmark task construction is next.
+**Current stage**: All 8 task builders are implemented. Datasets and dense-model smoke evaluations exist for every task. 
 
 ## Repository Structure
 
 ```
 PubMedTEB/
-├── preprocessing/     # XML-to-Parquet ETL + filtering notebook
-├── main.py            # Pipeline entry point
-├── docs/              # Design documents and plans
-├── mesh_explorer/     # MeSH hierarchy visualization
-└── pyproject.toml     # Project config (uv)
+├── pubmedteb/                       # Main package: builders, MTEB tasks, models, infra, analysis
+├── preprocessing/                    # XML-to-Parquet ETL + filtering notebook
+├── datasets/                         # Built benchmark datasets
+├── results/                          # MTEB evaluation outputs
+├── reports/mesh_investigation/       # MeSH investigation report, figures, tables
+├── notebooks/                        # Analysis notebooks
+├── docs/                             # Progress tracker, project report, design specs
+├── scripts/galvani/                  # SLURM deployment for cluster eval
+├── tools/mesh_explorer/              # Standalone MeSH hierarchy viewer
+├── archive/                          # Historical corpus characterization outputs
+├── literature/                       # Reference PDFs
+├── main.py                           # ETL pipeline entry point
+└── pyproject.toml                    # Project config (uv)
 ```
-
-See [`preprocessing/README.md`](preprocessing/README.md) for details on the data pipeline.
 
 ## Setup
 
