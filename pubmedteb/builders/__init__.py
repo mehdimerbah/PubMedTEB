@@ -6,11 +6,23 @@ from pathlib import Path
 
 from pubmedteb.builders.base import DatasetBuilder
 from pubmedteb.builders.citation_retrieval import CitationRetrievalBuilder
+from pubmedteb.builders.classification import ClassificationBuilder
+from pubmedteb.builders.clinical_trial_retrieval import ClinicalTrialRetrievalBuilder
+from pubmedteb.builders.cross_specialty_retrieval import CrossSpecialtyRetrievalBuilder
+from pubmedteb.builders.reranking import RerankingBuilder
+from pubmedteb.builders.review_retrieval import ReviewRetrievalBuilder
+from pubmedteb.builders.temporal_retrieval import TemporalRetrievalBuilder
 from pubmedteb.builders.title_retrieval import TitleRetrievalBuilder
 
 BUILDERS: dict[str, type[DatasetBuilder]] = {
     "title-retrieval": TitleRetrievalBuilder,
     "citation-retrieval": CitationRetrievalBuilder,
+    "reranking": RerankingBuilder,
+    "review-retrieval": ReviewRetrievalBuilder,
+    "temporal-retrieval": TemporalRetrievalBuilder,
+    "classification": ClassificationBuilder,
+    "clinical-trial-retrieval": ClinicalTrialRetrievalBuilder,
+    "cross-specialty-retrieval": CrossSpecialtyRetrievalBuilder,
 }
 
 

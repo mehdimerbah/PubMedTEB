@@ -68,11 +68,23 @@ def load_qrels(path: Path) -> dict[str, dict[str, int]]:
 
 # Task registry — import here to keep it centralized
 from pubmedteb.tasks.citation_retrieval import PubMedCitationRetrieval  # noqa: E402
+from pubmedteb.tasks.classification import PubMedMeSHClassification  # noqa: E402
+from pubmedteb.tasks.clinical_trial_retrieval import PubMedClinicalTrialRetrieval  # noqa: E402
+from pubmedteb.tasks.cross_specialty_retrieval import PubMedCrossSpecialtyRetrieval  # noqa: E402
+from pubmedteb.tasks.reranking import PubMedReranking  # noqa: E402
+from pubmedteb.tasks.review_retrieval import PubMedReviewRetrieval  # noqa: E402
+from pubmedteb.tasks.temporal_retrieval import PubMedTemporalRetrieval  # noqa: E402
 from pubmedteb.tasks.title_retrieval import PubMedTitleRetrieval  # noqa: E402
 
 ALL_TASKS: list[type] = [
     PubMedTitleRetrieval,
     PubMedCitationRetrieval,
+    PubMedReranking,
+    PubMedReviewRetrieval,
+    PubMedTemporalRetrieval,
+    PubMedMeSHClassification,
+    PubMedClinicalTrialRetrieval,
+    PubMedCrossSpecialtyRetrieval,
 ]
 
 _TASK_MAP: dict[str, type] = {t.metadata.name: t for t in ALL_TASKS}
