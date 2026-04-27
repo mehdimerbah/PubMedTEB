@@ -56,7 +56,7 @@ class CitationRetrievalBuilder(DatasetBuilder):
             "min_pos": 10,
             "max_pos": 30,
         },
-    }7
+    }
 
     def construct(
         self,
