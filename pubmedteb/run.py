@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 import sys
 from pathlib import Path
 
@@ -348,10 +347,18 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    # Hard-exit after main() returns: HF Hub / httpx background threads
-    # otherwise keep the interpreter alive and srun blocks until SLURM
-    # time limit, burning the entire job on one task.
     rc = main()
     sys.stdout.flush()
     sys.stderr.flush()
-    os._exit(rc)
+    # HF Hub / xet-store spawn non-daemon background threads that keep the
+    # interpreter alive after main() returns. Demote them so sys.exit can
+    # actually return control to srun, instead of needing os._exit (which
+    # skips cleanup and confuses slurmstepd's stdio teardown).
+    import threading
+    for t in threading.enumerate():
+        if t is not threading.main_thread() and not t.daemon:
+            try:
+                t.daemon = True
+            except RuntimeError:
+                pass
+    sys.exit(rc)
