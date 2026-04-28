@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -347,4 +348,10 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Hard-exit after main() returns: HF Hub / httpx background threads
+    # otherwise keep the interpreter alive and srun blocks until SLURM
+    # time limit, burning the entire job on one task.
+    rc = main()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(rc)
